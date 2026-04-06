@@ -167,6 +167,7 @@ from .op.unified_ops import (
 from .parser.decorator import InlineFunction, function, inline, program
 from .parser.text_parser import loads, loads_program, parse, parse_program
 from .typing import DynVar, InOut, IntLike, Out, Scalar, Tensor, Tile, Tuple, dynamic
+from .grad.trace import trace, print_trace, TraceResult, TraceInfo
 
 # Short alias for MemorySpace (pl.Mem.Vec instead of pl.MemorySpace.Vec)
 Mem = MemorySpace
@@ -217,6 +218,10 @@ __all__ = [
     "IntLike",
     "Out",
     "dynamic",
+    "trace",
+    "print_trace",
+    "TraceResult",
+    "TraceInfo",
     "const",
     "range",
     "parallel",

@@ -602,6 +602,7 @@ def function(
     role: ir.Role | None = None,
     attrs: dict[str, Any] | None = None,
     strict_ssa: bool = False,
+    is_backward_registered: bool = False,
 ) -> ir.Function | FunctionDecorator:
     """Decorator that parses a DSL function and returns IR Function.
 
@@ -617,6 +618,9 @@ def function(
         attrs: Function-level attributes dict (e.g. {"split": pl.SplitMode.UP_DOWN})
         strict_ssa: If True, enforce SSA (single assignment per variable).
                    If False (default), allow variable reassignment (non-SSA mode).
+        is_backward_registered: If True, function is registered for backward pass
+                             and should be treated as a complete independent node
+                             during tracing. Default is False.
 
     Returns:
         IR Function object (or decorator if used with parameters)
@@ -628,6 +632,9 @@ def function(
         ...     return result
         >>> @pl.function(level=pl.Level.HOST, role=pl.Role.Worker)
         ... def worker(x: pl.Tensor[[64], pl.FP32]) -> pl.Tensor[[64], pl.FP32]:
+        ...     return x
+        >>> @pl.function(is_backward_registered=True)
+        ... def backward_func(x: pl.Tensor[[64, 64], pl.FP32]) -> pl.Tensor[[64, 64], pl.FP32]:
         ...     return x
     """
 
@@ -674,6 +681,12 @@ def function(
 
             # Normalize attrs: convert enum values to ints for storage
             func_attrs = _normalize_attrs(attrs) if attrs else None
+
+            # Add is_backward_registered attribute if specified
+            if is_backward_registered:
+                if func_attrs is None:
+                    func_attrs = {}
+                func_attrs["is_backward_registered"] = True
 
             try:
                 ir_func = parser.parse_function(
