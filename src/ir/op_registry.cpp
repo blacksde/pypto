@@ -190,5 +190,19 @@ void OpRegistry::ValidateTileOps() const {
   }
 }
 
+std::optional<std::string> OpRegistry::GetReverseOp(const std::string& op_name) const {
+  auto it = registry_.find(op_name);
+  if (it == registry_.end()) {
+    return std::nullopt;
+  }
+  return it->second.GetReverseOp();
+}
+
+void OpRegistry::RegisterReverseOp(const std::string& forward_op, const std::string& reverse_op) {
+  auto it = registry_.find(forward_op);
+  CHECK(it != registry_.end()) << "Forward operator '" + forward_op + "' not found in registry";
+  it->second.set_reverse_op(reverse_op);
+}
+
 }  // namespace ir
 }  // namespace pypto

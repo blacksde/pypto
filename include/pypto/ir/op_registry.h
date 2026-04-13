@@ -392,6 +392,15 @@ class OpRegistryEntry {
   /// explicitly call not_inplace_safe() during registration.
   [[nodiscard]] bool IsInplaceSafe() const { return is_inplace_safe_; }
 
+  /// Set the reverse operator for gradient computation
+  inline OpRegistryEntry& set_reverse_op(const std::string& reverse_op_name) {
+    reverse_op_name_ = reverse_op_name;
+    return *this;
+  }
+
+  /// Get the reverse operator name if registered
+  [[nodiscard]] std::optional<std::string> GetReverseOp() const { return reverse_op_name_; }
+
  private:
   void EnsureMemorySpec() {
     if (!memory_spec_.has_value()) {
@@ -425,6 +434,7 @@ class OpRegistryEntry {
       deduce_type_;                               ///< Type deduction function
   std::optional<OpMemorySpaceSpec> memory_spec_;  ///< Memory space specification
   bool is_inplace_safe_{true};  ///< Whether the op supports in-place execution (src == dst buffer)
+  std::optional<std::string> reverse_op_name_;  ///< Reverse operator name for gradient computation
 };
 
 /**
@@ -533,6 +543,22 @@ class OpRegistry {
    */
   void ValidateTileOps() const;
 
+  /**
+   * @brief Get the reverse operator for a given operator
+   *
+   * @param op_name Name of the forward operator
+   * @return Name of the reverse operator, or nullopt if not registered
+   */
+  [[nodiscard]] std::optional<std::string> GetReverseOp(const std::string& op_name) const;
+
+  /**
+   * @brief Register a reverse operator mapping
+   *
+   * @param forward_op Name of the forward operator
+   * @param reverse_op Name of the reverse operator
+   */
+  void RegisterReverseOp(const std::string& forward_op, const std::string& reverse_op);
+
  private:
   OpRegistry() = default;
   ~OpRegistry() = default;
@@ -569,6 +595,18 @@ void ValidateKwargs(const std::vector<std::pair<std::string, std::any>>& kwargs,
 #define REGISTER_OP(OpName)                                                                           \
   static PYPTO_STR_CONCAT(PYPTO_UNUSED ::pypto::ir::OpRegistryEntry& OpRegistryEntry_, __COUNTER__) = \
       ::pypto::ir::OpRegistry::GetInstance().Register(OpName)
+
+/**
+ * @brief Helper macro for reverse operator registration
+ *
+ * Use this macro to register reverse operator mappings:
+ * @code
+ * REGISTER_REVERSE_OP("tensor.add", "tensor.add_grad");
+ * REGISTER_REVERSE_OP("tensor.mul", "tensor.mul_grad");
+ * @endcode
+ */
+#define REGISTER_REVERSE_OP(ForwardOp, ReverseOp) \
+  ::pypto::ir::OpRegistry::GetInstance().RegisterReverseOp(ForwardOp, ReverseOp)
 
 }  // namespace ir
 }  // namespace pypto

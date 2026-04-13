@@ -43,6 +43,57 @@ from pypto.pypto_core.ir import (
     FunctionType,
 )
 
+_SYSTEM_OPS = {
+    "tpush_to_aiv",
+    "tpush_to_aic",
+    "tpop_from_aic",
+    "tpop_from_aiv",
+    "aic_initialize_pipe",
+    "aiv_initialize_pipe",
+    "reserve_buffer",
+    "import_peer_buffer",
+    "tfree_to_aic",
+    "tfree_to_aiv",
+    "sync_src",
+    "sync_dst",
+}
+
+_TILE_OPS = {
+    "load",
+    "store",
+    "move",
+    "create_tile",
+    "fillpad",
+    "gemv",
+    "gemv_acc",
+    "gemv_bias",
+    "matmul_bias",
+    "addc",
+    "subc",
+    "addsc",
+    "subsc",
+    "and_",
+    "ands",
+    "or_",
+    "ors",
+    "xor",
+    "xors",
+    "shl",
+    "shls",
+    "shr",
+    "shrs",
+    "cmp",
+    "cmps",
+    "rem",
+    "rems",
+    "sel",
+    "sels",
+    "maxs",
+    "mins",
+    "prelu",
+    "lrelu",
+}
+
 
 @dataclass
 class TraceInfo:
@@ -57,6 +108,7 @@ class TraceInfo:
         return_type: Return type information string
         source_location: Tuple of (file, line, column) if available
         index: Sequential index in the trace
+        output_var: Output variable expression if this operation defines a variable
     """
 
     op_name: str
@@ -67,6 +119,7 @@ class TraceInfo:
     return_type: str
     source_location: tuple[str, int, int] | None
     index: int
+    output_var: Expr | None = None
 
 
 @dataclass
@@ -75,10 +128,11 @@ class TraceResult:
 
     Attributes:
         function_name: Name of the traced function
-        function_type: Type of the function (Orchestration, InCore, etc.)
+        function_type: Type of function (Orchestration, InCore, etc.)
         operations: List of collected operations in execution order
         param_info: List of parameter information strings
         return_types: List of return type information strings
+        function: The function object that was traced
     """
 
     function_name: str
@@ -86,6 +140,7 @@ class TraceResult:
     operations: List[TraceInfo] = field(default_factory=list)
     param_info: List[str] = field(default_factory=list)
     return_types: List[str] = field(default_factory=list)
+    function: Function | None = None
 
     def filter_by_op(self, op_name: str) -> List[TraceInfo]:
         """Filter operations by operation name.
@@ -231,6 +286,7 @@ class TraceVisitor(IRVisitor):
         self.param_info: List[str] = []
         self.return_types: List[str] = []
         self._backward_registered_functions: set = set()
+        self._current_output_var: Expr | None = None
 
     def _is_backward_registered_call(self, op: Call) -> bool:
         """Check if this is a call to a backward registered function.
@@ -275,6 +331,110 @@ class TraceVisitor(IRVisitor):
         # Visit function body
         if func.body:
             self.visit_stmt(func.body)
+
+    def visit_for_stmt(self, stmt) -> None:
+        """Visit a for loop statement and record loop information.
+        
+        Args:
+            stmt: ForStmt node to visit
+        """
+        # Extract loop kind string
+        kind_str = str(stmt.kind).split('.')[-1] if hasattr(stmt, 'kind') else 'Sequential'
+        
+        # Determine operation name based on kind
+        op_name_map = {
+            'Sequential': 'range',
+            'Parallel': 'parallel',
+            'Unroll': 'unroll',
+        }
+        op_name = op_name_map.get(kind_str, f'for.{kind_str.lower()}')
+        
+        # Extract loop bounds as arguments
+        args = [stmt.start, stmt.stop, stmt.step]
+        
+        # Extract argument types
+        arg_types = [self._get_type_info(arg) for arg in args]
+        
+        # Extract source location
+        source_location = None
+        if hasattr(stmt, 'span') and stmt.span:
+            span = stmt.span
+            if hasattr(span, 'file_path') and hasattr(span, 'line') and hasattr(span, 'column'):
+                source_location = (span.file_path, span.line, span.column)
+        
+        # Create loop info as a special operation
+        loop_info = TraceInfo(
+            op_name=op_name,
+            op_type='control_flow',
+            args=args,
+            kwargs={
+                'iter_args': len(stmt.iter_args) if hasattr(stmt, 'iter_args') else 0,
+                'return_vars': len(stmt.return_vars) if hasattr(stmt, 'return_vars') else 0,
+                'kind': kind_str,
+            },
+            arg_types=arg_types,
+            return_type=f'ForLoop[{stmt.loop_var}]',
+            source_location=source_location,
+            index=self.current_index,
+            output_var=None,
+        )
+        self.operations.append(loop_info)
+        self.current_index += 1
+        
+        # Visit loop body to collect operations inside the loop
+        if hasattr(stmt, 'body') and stmt.body:
+            self.visit_stmt(stmt.body)
+    
+    def visit_while_stmt(self, stmt) -> None:
+        """Visit a while loop statement and record loop information.
+        
+        Args:
+            stmt: WhileStmt node to visit
+        """
+        # Extract source location
+        source_location = None
+        if hasattr(stmt, 'span') and stmt.span:
+            span = stmt.span
+            if hasattr(span, 'file_path') and hasattr(span, 'line') and hasattr(span, 'column'):
+                source_location = (span.file_path, span.line, span.column)
+        
+        # Create while loop info as a special operation
+        loop_info = TraceInfo(
+            op_name='while',
+            op_type='control_flow',
+            args=[stmt.condition] if hasattr(stmt, 'condition') else [],
+            kwargs={
+                'iter_args': len(stmt.iter_args) if hasattr(stmt, 'iter_args') else 0,
+                'return_vars': len(stmt.return_vars) if hasattr(stmt, 'return_vars') else 0,
+            },
+            arg_types=[self._get_type_info(stmt.condition)] if hasattr(stmt, 'condition') else [],
+            return_type='WhileLoop',
+            source_location=source_location,
+            index=self.current_index,
+            output_var=None,
+        )
+        self.operations.append(loop_info)
+        self.current_index += 1
+        
+        # Visit loop body to collect operations inside the loop
+        if hasattr(stmt, 'body') and stmt.body:
+            self.visit_stmt(stmt.body)
+    
+    def visit_assign_stmt(self, stmt) -> None:
+        """Visit an assignment statement and track the output variable.
+        
+        Args:
+            stmt: AssignStmt node to visit
+        """
+        # Set current output variable before visiting value
+        self._current_output_var = stmt.var
+        
+        # Visit value (which will visit any calls)
+        if stmt.value:
+            self.visit_expr(stmt.value)
+        
+        # Clear current output variable
+        self._current_output_var = None
 
     def visit_call(self, op: Call) -> None:
         """Visit a call operation and collect trace information.
@@ -335,6 +495,7 @@ class TraceVisitor(IRVisitor):
             return_type=return_type,
             source_location=source_location,
             index=self.current_index,
+            output_var=self._current_output_var,
         )
 
     def _determine_op_type(self, call: Call) -> str:
@@ -348,74 +509,20 @@ class TraceVisitor(IRVisitor):
         """
         op_name = call.op.name if hasattr(call.op, "name") else str(call.op)
 
-        # System operations
-        system_ops = [
-            "tpush_to_aiv",
-            "tpush_to_aic",
-            "tpop_from_aic",
-            "tpop_from_aiv",
-            "aic_initialize_pipe",
-            "aiv_initialize_pipe",
-            "reserve_buffer",
-            "import_peer_buffer",
-            "tfree_to_aic",
-            "tfree_to_aiv",
-            "sync_src",
-            "sync_dst",
-        ]
-
-        if op_name in system_ops:
+        if op_name in _SYSTEM_OPS:
             return "system"
 
-        # Tile operations (common tile-specific ops)
-        tile_ops = [
-            "load",
-            "store",
-            "move",
-            "create_tile",
-            "fillpad",
-            "gemv",
-            "gemv_acc",
-            "gemv_bias",
-            "matmul_bias",
-            "addc",
-            "subc",
-            "addsc",
-            "subsc",
-            "and_",
-            "ands",
-            "or_",
-            "ors",
-            "xor",
-            "xors",
-            "shl",
-            "shls",
-            "shr",
-            "shrs",
-            "cmp",
-            "cmps",
-            "rem",
-            "rems",
-            "sel",
-            "sels",
-            "maxs",
-            "mins",
-            "prelu",
-            "lrelu",
-        ]
-
-        if op_name in tile_ops:
+        if op_name in _TILE_OPS:
             return "tile"
-
-        # Tensor operations (default for most ops)
+        
         return "tensor"
-
+    
     def _get_type_info(self, expr: Expr) -> str:
         """Get type information string for an expression.
-
+        
         Args:
             expr: Expression to get type info for
-
+            
         Returns:
             Type information string
         """
@@ -423,28 +530,27 @@ class TraceVisitor(IRVisitor):
             if hasattr(expr, "type") and expr.type:
                 return f"{expr.name_hint}: {expr.type}"
             return f"{expr.name_hint}: unknown"
-
+        
         elif isinstance(expr, ConstInt):
             return f"ConstInt({expr.value})"
-
+        
         elif isinstance(expr, ConstFloat):
             return f"ConstFloat({expr.value})"
-
+        
         elif isinstance(expr, ConstBool):
             return f"ConstBool({expr.value})"
-
+        
         elif isinstance(expr, Call):
             op_name = expr.op.name if hasattr(expr.op, "name") else str(expr.op)
             if hasattr(expr, "type") and expr.type:
                 return f"Call({op_name}): {expr.type}"
             return f"Call({op_name}): unknown"
-
+        
         else:
             if hasattr(expr, "type") and expr.type:
                 return f"{type(expr).__name__}: {expr.type}"
             return type(expr).__name__
-
-
+ 
 def trace(func: Function) -> TraceResult:
     """Trace a function and collect operation information.
 
@@ -481,6 +587,7 @@ def trace(func: Function) -> TraceResult:
         operations=visitor.operations,
         param_info=visitor.param_info,
         return_types=visitor.return_types,
+        function=func,
     )
 
 

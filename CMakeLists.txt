@@ -90,6 +90,7 @@ set(PYPTO_SOURCES
     src/ir/function.cpp
     src/ir/memref.cpp
     src/ir/op_registry.cpp
+    src/ir/grad_registry.cpp
     src/ir/program.cpp
     src/ir/stmt.cpp
     src/ir/type.cpp

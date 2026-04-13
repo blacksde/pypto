@@ -35,6 +35,7 @@
 #include "pypto/ir/function.h"
 #include "pypto/ir/memref.h"
 #include "pypto/ir/op_registry.h"
+#include "pypto/ir/grad_registry.h"
 #include "pypto/ir/pipe.h"
 #include "pypto/ir/program.h"
 #include "pypto/ir/reflection/field_visitor.h"
@@ -452,6 +453,34 @@ void BindIR(nb::module_& m) {
         return result;
       },
       nb::arg("op_name"), "Get memory space specification for a registered operator");
+
+  // GradRegistry
+  ir.def(
+      "register_grad",
+      [](const std::string& op_name, const std::function<std::vector<ExprPtr>(const std::vector<ExprPtr>&, ExprPtr)>& grad_func) {
+        GradRegistry::GetInstance().RegisterGrad(op_name, grad_func);
+      },
+      nb::arg("op_name"), nb::arg("grad_func"),
+      "Register a gradient computation function for an operator");
+
+  ir.def(
+      "get_grad",
+      [](const std::string& op_name) -> nb::object {
+        auto grad_func = GradRegistry::GetInstance().GetGrad(op_name);
+        if (!grad_func) return nb::none();
+        // Wrap the C++ function in a Python callable
+        return nb::cpp_function([grad_func](const std::vector<ExprPtr>& inputs, ExprPtr grad_output) {
+          return grad_func(inputs, grad_output);
+        });
+      },
+      nb::arg("op_name"), "Get the gradient function for an operator");
+
+  ir.def(
+      "has_grad",
+      [](const std::string& op_name) -> bool {
+        return GradRegistry::GetInstance().HasGrad(op_name);
+      },
+      nb::arg("op_name"), "Check if an operator has a registered gradient");
 
   // Var - const shared_ptr
   auto var_class = nb::class_<Var, Expr>(ir, "Var", "Variable reference expression");

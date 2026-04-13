@@ -27,13 +27,15 @@ from .pypto_core import (
     log_debug,
     log_error,
     log_event,
-    log_fatal,
     log_info,
     log_warn,
     passes,
     set_log_level,
     testing,
 )
+
+from .language.grad.auto_register import auto_register_gradients
+auto_register_gradients()
 
 # Convenient dtype constants
 DT_BOOL: DataType = cast(DataType, DataType.BOOL)

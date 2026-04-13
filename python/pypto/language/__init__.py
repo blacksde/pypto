@@ -168,6 +168,10 @@ from .parser.decorator import InlineFunction, function, inline, program
 from .parser.text_parser import loads, loads_program, parse, parse_program
 from .typing import DynVar, InOut, IntLike, Out, Scalar, Tensor, Tile, Tuple, dynamic
 from .grad.trace import trace, print_trace, TraceResult, TraceInfo
+from .grad.trace_reconstruction import reconstruct_from_trace
+from .grad.autodiff import grad, value_and_grad, register_grad, enable_grad, disable_grad, is_grad_enabled
+from .grad.autodiff_engine import AutodiffEngine, get_global_autodiff_engine
+from .grad.trace_grad import grad_from_trace, grad_from_trace_with_check, grad_by_trace, grad_by_trace_v2
 
 # Short alias for MemorySpace (pl.Mem.Vec instead of pl.MemorySpace.Vec)
 Mem = MemorySpace
@@ -222,6 +226,19 @@ __all__ = [
     "print_trace",
     "TraceResult",
     "TraceInfo",
+    "reconstruct_from_trace",
+    "grad",
+    "value_and_grad",
+    "register_grad",
+    "enable_grad",
+    "disable_grad",
+    "is_grad_enabled",
+    "AutodiffEngine",
+    "get_global_autodiff_engine",
+    "grad_from_trace",
+    "grad_from_trace_with_check",
+    "grad_by_trace",
+    "grad_by_trace_v2",
     "const",
     "range",
     "parallel",
