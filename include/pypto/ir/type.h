@@ -471,6 +471,50 @@ class TensorType : public ShapedType {
 using TensorTypePtr = std::shared_ptr<const TensorType>;
 
 /**
+ * @brief TensorArray type representation
+ *
+ * Represents a dynamic array type for storing tensor values during loop execution.
+ * Used for tape-based gradient computation in reverse mode autodiff.
+ */
+class TensorArrayType : public Type {
+ public:
+  DataType dtype_;              ///< Element data type
+  std::vector<ExprPtr> shape_;  ///< Shape dimensions of each element
+  ExprPtr capacity_;            ///< Maximum number of elements (loop iterations)
+
+  /**
+   * @brief Create a tensor array type with symbolic capacity
+   *
+   * @param shape Shape dimensions of each element
+   * @param dtype Element data type
+   * @param capacity Maximum number of elements
+   */
+  TensorArrayType(std::vector<ExprPtr> shape, DataType dtype, ExprPtr capacity)
+      : dtype_(dtype), shape_(std::move(shape)), capacity_(std::move(capacity)) {}
+
+  /**
+   * @brief Create a tensor array type with constant shape and capacity
+   *
+   * @param shape Shape dimensions of each element (int64)
+   * @param dtype Element data type
+   * @param capacity Maximum number of elements (int64)
+   */
+  TensorArrayType(const std::vector<int64_t>& shape, DataType dtype, int64_t capacity);
+
+  [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TensorArrayType; }
+  [[nodiscard]] std::string TypeName() const override { return "TensorArrayType"; }
+
+  static constexpr auto GetFieldDescriptors() {
+    return std::tuple_cat(Type::GetFieldDescriptors(),
+                          std::make_tuple(reflection::UsualField(&TensorArrayType::dtype_, "dtype"),
+                                          reflection::UsualField(&TensorArrayType::shape_, "shape"),
+                                          reflection::UsualField(&TensorArrayType::capacity_, "capacity")));
+  }
+};
+
+using TensorArrayTypePtr = std::shared_ptr<const TensorArrayType>;
+
+/**
  * @brief Tile type representation
  *
  * Represents a tile type (multi-dimensional tensor).

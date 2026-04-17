@@ -174,6 +174,8 @@ from .parser.decorator import InlineFunction, function, inline, program
 from .parser.text_parser import loads, loads_program, parse, parse_program
 from .typing import DynVar, InOut, IntLike, MemRef, Out, Scalar, Tensor, Tile, Tuple, dynamic
 
+from pypto.autodiff import grad, value_and_grad
+
 # Short alias for MemorySpace (pl.Mem.Vec instead of pl.MemorySpace.Vec)
 Mem = MemorySpace
 
@@ -217,6 +219,8 @@ __all__ = [
     "loads",
     "parse_program",
     "loads_program",
+    "grad",
+    "value_and_grad",
     "Tensor",
     "Tile",
     "Scalar",

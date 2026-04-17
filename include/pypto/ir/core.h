@@ -102,6 +102,7 @@ enum class ObjectKind {
   ScalarType,
   ShapedType,
   TensorType,
+  TensorArrayType,
   TileType,
   TupleType,
 

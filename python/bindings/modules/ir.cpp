@@ -325,6 +325,17 @@ void BindIR(nb::module_& m) {
       "Create a tile type (supports multi-dimensional tensors; code generation has constraints)");
   BindFields<TileType>(tile_type_class);
 
+  // TensorArrayType - const shared_ptr (for tape-based autodiff)
+  auto tensor_array_type_class = nb::class_<TensorArrayType, Type>(
+      ir, "TensorArrayType", "TensorArray type for tape-based gradient computation");
+  tensor_array_type_class.def(nb::init<const std::vector<ExprPtr>&, DataType, ExprPtr>(), nb::arg("shape"),
+                              nb::arg("dtype"), nb::arg("capacity"),
+                              "Create a tensor array type with symbolic capacity");
+  tensor_array_type_class.def(nb::init<const std::vector<int64_t>&, DataType, int64_t>(), nb::arg("shape"),
+                              nb::arg("dtype"), nb::arg("capacity"),
+                              "Create a tensor array type with constant shape and capacity");
+  BindFields<TensorArrayType>(tensor_array_type_class);
+
   // TupleType - const shared_ptr
   auto tuple_type_class =
       nb::class_<TupleType, Type>(ir, "TupleType", "Tuple type representation (contains multiple types)");

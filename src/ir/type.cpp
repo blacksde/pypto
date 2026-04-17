@@ -165,5 +165,14 @@ std::optional<MemorySpace> TileType::ValidateMemorySpace(const std::optional<Mem
                                                          std::optional<MemorySpace> memory_space) {
   return ValidateTileMemorySpaceConsistency(memref, memory_space);
 }
+
+TensorArrayType::TensorArrayType(const std::vector<int64_t>& shape, DataType dtype, int64_t capacity)
+    : dtype_(dtype) {
+  for (int64_t dim : shape) {
+    shape_.push_back(std::make_shared<ConstInt>(dim, DataType::INDEX, Span::unknown()));
+  }
+  capacity_ = std::make_shared<ConstInt>(capacity, DataType::INDEX, Span::unknown());
+}
+
 }  // namespace ir
 }  // namespace pypto
